@@ -1,0 +1,429 @@
+<head>
+    <title>Complementary Colors</title>
+    <meta description="This effect will cycle through 4 colors that you can select from a color scheme, or you can choose yourself. For each color a certain amount of complementary colors will be generated. This way you can have certain parts of your setup light up in different, but always matching colors." />
+    <meta publisher="RickOfficial" />
+
+    <meta property="colorScheme" label="Color Scheme" type="combobox" values="Rainbow Bright,Oceanic,Electric Sunrise,Citrus Burst,Berry Blast,Summer Days,Candy Crush,Neon Nights,Tropical Paradise,Sunset Boulevard,Custom" default="Neon"/>
+    <meta property="color1" label="Custom Color 1" type="color" min="0" max="360" default="#ff00ff" />
+    <meta property="color2" label="Custom Color 2" type="color" min="0" max="360" default="#ff0081" />
+    <meta property="color3" label="Custom Color 3" type="color" min="0" max="360" default="#0075ff" />
+    <meta property="color4" label="Custom Color 4" type="color" min="0" max="360" default="#00ffff" />
+    <meta property="maxhue" label="Max hue shift" type="number" min="1" max="360" default="180" />
+    <meta property="onoffBar" label="Add on/off bar" type="boolean" default="0" />
+    <meta property="gradientBar" label="Add gradient bar" type="boolean" default="1" />
+    <meta property="gradientBarAnimated" label="Animate gradient bar" type="boolean" default="0" />
+    <meta property="speed" label="Transition Speed (seconds)" type="number" min="1" max="60" default="3" />
+    <meta property="delay" label="Delay (seconds)" type="number" min="1" max="60" default="5" />
+    <meta property="amount" label="Amount of colors" type="number" min="2" max="60" default="3" />
+    <meta property="alertColor" label="Alert Color" type="color" min="0" max="360" default="#FFFF00"/>
+    <meta property="alertType" label="Alert Type" type="combobox" values="Swipe,Flash" default="Swipe"/>
+    <meta property="testAlert" label="Test alert" type="boolean" default="1"/>
+
+    <meta meter="isDismantling" tags="Satisfactory,vlc" type="area" x="0" y="0" width=".1" height=".007" h="18-20" s="99-100" l="0-100"></meta>
+    <meta meter="isAttackedByAlien" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.454296875" y="0.18611111" width="0.10625" height="0.018056" string="HOSTILITY" confidence="70"></meta>
+    <meta meter="isDamagedByAlien" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.4443" y="0.1786" width="0.1106" height="0.0486" string="DAMAGE" confidence="70" />
+</head>
+<body style="margin: 0; padding: 0">
+    <canvas id="colorCanvas" width="320" height="200"></canvas>
+</body>
+
+<!-- Socket IO -->
+<!-- <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script> -->
+
+<!-- Websocket //-->
+<script>
+    // console.log("Opening socket");
+    // let sockets = io('http://creachickgames.test:8756');
+    // let socketId = 0;
+
+    // sockets.on('connect', () => {
+    //     socketId = sockets.id;
+    //     console.log('Connected to Chatbot');
+    //     console.log(socketId);
+    // });
+</script>
+
+<!-- Color functions //-->
+<script>
+    function rgbToHex(r, g, b) {
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    function hexToHSL(hex) {
+        const rgb = hexToRGB(hex);
+        const r = rgb.r / 255;
+        const g = rgb.g / 255;
+        const b = rgb.b / 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+
+        if (max === min) {
+            h = s = 0;
+        } else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            if (max === r) {
+                h = (g - b) / d + (g < b ? 6 : 0);
+            } else if (max === g) {
+                h = (b - r) / d + 2;
+            } else {
+                h = (r - g) / d + 4;
+            }
+            h /= 6;
+        }
+        return { h, s, l };
+    }
+
+    function hslToHex(h, s, l) {
+        const rgb = hslToRGB(h, s, l);
+        return "#" + ((1 << 24) + (rgb.r << 16) + (rgb.g << 8) + rgb.b).toString(16).slice(1);
+    }
+
+    function hslToRGB(h, s, l) {
+        let r, g, b;
+
+        if (s === 0) {
+            r = g = b = l;
+        } else {
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                if (t < 1 / 2) return q;
+                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                return p;
+            };
+
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            r = hue2rgb(p, q, h + 1 / 3);
+            g = hue2rgb(p, q, h);
+            b = hue2rgb(p, q, h - 1 / 3);
+        }
+        return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+    }
+
+    function hexToRGB(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
+    }
+
+    function getComplementaryColors(color, amount, maxHue) {
+        const hsl = hexToHSL(color);
+        const step = maxHue / amount;
+        const complementaryColors = [];
+
+        for (let i = 1; i < amount; i++) {
+            const newH = (hsl.h + step * i) % 1;
+            const newColor = hslToHex(newH, hsl.s, hsl.l);
+            complementaryColors.push(newColor);
+        }
+
+        return complementaryColors;
+    }
+
+    function lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+
+    function lerpColor(color1, color2, t) {
+        const rgb1 = hexToRGB(color1);
+        const rgb2 = hexToRGB(color2);
+        const r = Math.round(lerp(rgb1.r, rgb2.r, t));
+        const g = Math.round(lerp(rgb1.g, rgb2.g, t));
+        const b = Math.round(lerp(rgb1.b, rgb2.b, t));
+        return rgbToHex(r, g, b);
+    }
+
+    function getColorScheme()
+    {
+        switch(colorScheme)
+        {
+            case 'Rainbow Bright':
+                color1 = '#FF4D4D'; // red
+                color2 = '#FFA54D'; // orange
+                color3 = '#FFEC4D'; // yellow
+                color4 = '#4DFF4D'; // green
+                break;
+            case 'Oceanic':
+                color1 = '#00C2FF'; // blue
+                color2 = '#00FFC2'; // turquoise
+                color3 = '#FFFF00'; // yellow
+                color4 = '#FF00C2'; // magenta
+                break;
+            case 'Electric Sunrise':
+                color1 = '#FF0080'; // magenta
+                color2 = '#FFD300'; // yellow
+                color3 = '#FF7600'; // orange
+                color4 = '#FF00F6'; // pink
+                break;
+            case 'Citrus Burst':
+                color1 = '#FFB000'; // orange
+                color2 = '#FFD300'; // yellow
+                color3 = '#9BFF00'; // lime green
+                color4 = '#00FFC2'; // turquoise
+                break;
+            case 'Berry Blast':
+                color1 = '#FF0090'; // magenta
+                color2 = '#C200FF'; // purple
+                color3 = '#4D4DFF'; // blue
+                color4 = '#00FFC2'; // turquoise
+                break;
+            case 'Summer Days':
+                color1 = '#FFA54D'; // orange
+                color2 = '#FFEC4D'; // yellow
+                color3 = '#4DFF4D'; // green
+                color4 = '#4D4DFF'; // blue
+                break;
+            case 'Candy Crush':
+                color1 = '#FF4D4D'; // red
+                color2 = '#FFA54D'; // orange
+                color3 = '#FF00F6'; // pink
+                color4 = '#C200FF'; // purple
+                break;
+            case 'Neon Nights':
+                color1 = '#00C2FF'; // blue
+                color2 = '#00FFC2'; // turquoise
+                color3 = '#00C2FF'; // blue
+                color4 = '#00FFC2'; // turquoise
+                break;
+            case 'Tropical Paradise':
+                color1 = '#FFA54D'; // orange
+                color2 = '#9BFF00'; // lime green
+                color3 = '#00C2FF'; // blue
+                color4 = '#C200FF'; // purple
+                break;
+            case 'Sunset Boulevard':
+                color1 = '#FF4D4D'; // red
+                color2 = '#FFA54D'; // orange
+                color3 = '#FFD300'; // yellow
+                color4 = '#00C2FF'; // blue
+                break;
+        }
+
+        return [color1, color2, color3, color4];
+    }
+</script>
+
+<!-- Animations //-->
+<script>
+    function forceVisionUpdate()
+    {
+        var shine = engine.vision.ShineMeter
+        let lightness = new Int8Array(engine.zone.lightness);
+        let sat = new Int8Array(engine.zone.saturation);
+        let hue = new Int16Array(engine.zone.hue);
+    }
+    
+    function renderAlert()
+    {
+        switch(alertType)
+        {
+            case "Swipe":
+                renderAlertSwipe();
+                break;
+            case "Flash":
+                renderAlertFlash();
+                break;
+        }
+    }
+
+    function renderAlertSwipe()
+    {
+        const duration = 2; // in seconds
+        const totalFrames = duration * fps;
+        const distanceToTravel = canvas.width * 2;
+
+        if (alertSwipeFrame < totalFrames) {
+            ctx.fillStyle = alertColor;
+            ctx.fillRect(alertSwipeBlockX, 0, canvas.width, canvas.height);
+
+            // Update position of block
+            alertSwipeBlockX += distanceToTravel / totalFrames;
+
+            // Increment frame count
+            alertSwipeFrame++;
+        } else {
+            alertSwipeFrame = 0;
+            alertSwipeBlockX = -canvas.width;
+        }
+    }
+
+    function renderAlertFlash()
+    {
+        const duration = 0.2;
+        const totalFrames = duration * fps;
+        if (alertFlashFrame < totalFrames) {
+            ctx.fillStyle = alertColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            alertFlashFrame++;
+        } else if (alertFlashFrame < totalFrames * 2) {
+            alertFlashFrame++;
+        } else {
+            alertFlashFrame = 0;
+        }
+    }
+</script>
+
+<script>
+    class Satisfactory
+    {
+        constructor()
+        {
+            console.log('Constructed Satisfactory');
+            // this.lastCheck = 0;
+            // var x = Math.round(2560 * .00039);
+            // var y = Math.round(1440 * .000695);
+            // var width = Math.round(2560 * .01);
+            // var height = Math.round(1440 * .000695);
+            // console.log(`Checking pixel location ${x},${y} - ${width} x ${height}`);
+        }
+
+        render(time)
+        {
+            if (engine.vision.isDismantling == 1)
+            {
+                console.log('Dismantling now!');
+            }
+
+            if (engine.vision.isDamagedByAlien == 1)
+            {
+                console.log(engine.vision.isDamagedByAlien);
+                console.log('Alien damaging');
+            }
+
+            if (engine.vision.isAttackedByAlien == 1)
+            {
+                console.log(engine.vision.isAttackedByAlien);
+                console.log('Attacked by alien');
+            }
+        }
+    }
+</script>
+
+<!-- Init and draw //-->
+<script>
+    const canvas = document.getElementById("colorCanvas");
+    const ctx = canvas.getContext("2d");
+    let rectWidth = canvas.width / 3;
+    const rectHeight = canvas.height;
+
+    const fps = 60;
+    const frameDuration = 1000 / fps;
+
+    let alertSwipeFrame = 0;
+    let alertSwipeBlockX = -canvas.width;
+
+    let alertFlashFrame = 0;
+
+    let cycleIndex = 0;
+    let startTime = Date.now();
+
+    let gradientBarOffset = 0;
+
+    let satisfactory = new Satisfactory();
+
+    function update() {
+        let currentTime = Date.now();
+        
+        forceVisionUpdate();
+
+        rectWidth = canvas.width / amount;
+        let cycleDuration = parseInt(speed) * 1000; // 5 seconds
+        let cycleDelay = parseInt(delay) * 1000;
+
+        let colorCycle = getColorScheme();
+
+        let elapsedTime = currentTime - startTime;
+        let t = (elapsedTime - cycleDelay) / cycleDuration;
+
+        if (t >= 1) {
+            startTime = currentTime;
+            cycleIndex = (cycleIndex + 1) % colorCycle.length;
+            t = 0;
+        } else if (t < 0) {
+            t = 0;
+        }
+
+        let primaryColor = lerpColor(colorCycle[cycleIndex], colorCycle[(cycleIndex + 1) % colorCycle.length], t);
+        let complementaryColors = getComplementaryColors(primaryColor, amount, maxhue / 360);
+
+        
+            ctx.fillStyle = primaryColor;
+            ctx.fillRect(0, 0, rectWidth, rectHeight);
+
+            // Create a gradient as well
+            let gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+            gradient.addColorStop(0, primaryColor);
+            
+            let gradientPct = (canvas.width / complementaryColors.length) / canvas.width;
+
+            for (let i = 0; i < complementaryColors.length; i++) {
+                ctx.fillStyle = complementaryColors[i];
+                ctx.fillRect((i + 1) * rectWidth, 0, rectWidth, rectHeight);
+
+                let gradientPosition = gradientPct + (gradientPct * i);
+                gradient.addColorStop(gradientPosition, complementaryColors[i]);
+            }
+
+        if (gradientBar)
+        {
+            if (gradientBarAnimated)
+            {
+                let gradientColors = [primaryColor].concat(complementaryColors, primaryColor);
+                let gradientPct = canvas.width / (gradientColors.length - 1) / canvas.width;
+                
+                gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+                for (let i = 0; i < gradientColors.length; i++) {
+                    let start = (gradientPct * i);
+                    gradient.addColorStop(start, gradientColors[i]);
+                }
+
+                gradientBarOffset -= 2; // Adjust this value to control the animation speed
+                if (gradientBarOffset <= -canvas.width) {
+                    gradientBarOffset = 0;
+                }
+
+                ctx.fillStyle = gradient;
+                ctx.save();
+                ctx.translate(gradientBarOffset, 0);
+                ctx.fillRect(0, canvas.height - 30, canvas.width, canvas.height); // First box
+                ctx.translate(canvas.width, 0);
+                ctx.fillRect(0, canvas.height - 30, canvas.width, canvas.height); // Second box
+                ctx.restore();
+            } else
+            {
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, canvas.height - 30, canvas.width, canvas.height);
+            }
+        }
+
+        if (testAlert)
+        {
+            renderAlert();
+        }
+
+        if (onoffBar)
+            {
+                // Add a black and white bar on top
+                const halfCanvas = canvas.width / 2;
+
+                ctx.fillStyle = "#FFFFFF";
+                ctx.fillRect(0, 0, halfCanvas, 10);
+
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(halfCanvas, 0, halfCanvas, 10);
+            }
+
+        satisfactory.render(currentTime);
+
+        window.requestAnimationFrame(update);
+    }
+
+    window.requestAnimationFrame(update);
+</script>
