@@ -21,7 +21,7 @@
 
     <meta meter="isDismantling" tags="Satisfactory,vlc" type="area" x="0" y="0" width=".1" height=".007" h="18-20" s="99-100" l="0-100"></meta>
     <meta meter="isAttackedByAlien" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.454296875" y="0.18611111" width="0.10625" height="0.018056" string="HOSTILITY" confidence="70"></meta>
-    <meta meter="isDamagedByAlien" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.4443" y="0.1786" width="0.1106" height="0.0486" string="DAMAGE" confidence="70" />
+    <meta meter="isDamaged" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.4443" y="0.1786" width="0.1106" height="0.0486" string="DAMAGE" confidence="70" />
 </head>
 <body style="margin: 0; padding: 0">
     <canvas id="colorCanvas" width="320" height="200"></canvas>
@@ -225,22 +225,22 @@
         switch(alertType)
         {
             case "Swipe":
-                renderAlertSwipe();
+                renderAlertSwipe(alertColor);
                 break;
             case "Flash":
-                renderAlertFlash();
+                renderAlertFlash(alertColor);
                 break;
         }
     }
 
-    function renderAlertSwipe()
+    function renderAlertSwipe(color)
     {
         const duration = 2; // in seconds
         const totalFrames = duration * fps;
         const distanceToTravel = canvas.width * 2;
 
         if (alertSwipeFrame < totalFrames) {
-            ctx.fillStyle = alertColor;
+            ctx.fillStyle = color;
             ctx.fillRect(alertSwipeBlockX, 0, canvas.width, canvas.height);
 
             // Update position of block
@@ -254,12 +254,12 @@
         }
     }
 
-    function renderAlertFlash()
+    function renderAlertFlash(color)
     {
         const duration = 0.2;
         const totalFrames = duration * fps;
         if (alertFlashFrame < totalFrames) {
-            ctx.fillStyle = alertColor;
+            ctx.fillStyle = color;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             alertFlashFrame++;
         } else if (alertFlashFrame < totalFrames * 2) {
@@ -271,12 +271,54 @@
 </script>
 
 <script>
+    class AlertAnimation
+    {
+        constructor()
+        {
+            this.reset();
+        }
+
+        reset()
+        {
+            this.clearTimeout();
+
+            this.active = false;
+            this.t = 0;
+            this.timeout = 0
+            this.startTime = 0;
+        }
+
+        start(time)
+        {
+            this.active = true;
+            this.startTime = time;
+        }
+
+        end()
+        {
+            this.timeout = setTimeout(this.reset.bind(this), 200);
+        }
+
+        clearTimeout()
+        {
+            // Clear timeout if set
+            if (this.timeout) clearTimeout(this.timeout);
+        }
+
+        getDuration(time)
+        {
+            this.t = time - this.startTime;
+            return this.t;
+        }
+    }
+
     class Satisfactory
     {
         constructor()
         {
             console.log('Constructed Satisfactory');
-            // this.lastCheck = 0;
+            
+            this.dismantling = new AlertAnimation();
             // var x = Math.round(2560 * .00039);
             // var y = Math.round(1440 * .000695);
             // var width = Math.round(2560 * .01);
@@ -286,21 +328,42 @@
 
         render(time)
         {
-            if (engine.vision.isDismantling == 1)
-            {
-                console.log('Dismantling now!');
-            }
+            this.renderDismantle(engine.vision.isDismantling, time);
 
             if (engine.vision.isDamagedByAlien == 1)
             {
-                console.log(engine.vision.isDamagedByAlien);
-                console.log('Alien damaging');
+                console.log(engine.vision.isDamaged);
+                console.log('Damage!');
             }
 
             if (engine.vision.isAttackedByAlien == 1)
             {
                 console.log(engine.vision.isAttackedByAlien);
                 console.log('Attacked by alien');
+            }
+        }
+
+        renderDismantle(dismantling, time)
+        {
+            if (!dismantling && this.dismantling.active)
+            {
+                // We should stop the animation
+                // So we set a timeout
+                this.dismantling.end();
+            } else if (dismantling)
+            {
+                // We should be dismantling
+                if (this.dismantling.active)
+                {
+                    // Clear any timeout that might be set by stopping dismantling
+                    this.dismantling.clearTimeout();
+
+                    // TODO: Do a switch of animation type
+                    renderAlertSwipe(alertColor);
+                } else
+                {
+                    this.dismantling.start(time);
+                }
             }
         }
     }
