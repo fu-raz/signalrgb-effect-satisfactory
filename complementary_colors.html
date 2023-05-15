@@ -19,9 +19,16 @@
     <meta property="alertType" label="Alert Type" type="combobox" values="Swipe,Flash" default="Swipe"/>
     <meta property="testAlert" label="Test alert" type="boolean" default="1"/>
 
-    <meta meter="isDismantling" tags="Satisfactory,vlc" type="area" x="0" y="0" width=".1" height=".007" h="18-20" s="99-100" l="0-100"></meta>
-    <meta meter="isAttackedByAlien" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.454296875" y="0.18611111" width="0.10625" height="0.018056" string="HOSTILITY" confidence="70"></meta>
-    <meta meter="isDamaged" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.4443" y="0.1786" width="0.1106" height="0.0486" string="DAMAGE" confidence="70" />
+    <meta meter="isDismantling" tags="Satisfactory,vlc" type="area" x="0" y="0" width=".1" height=".007" h="18-20" s="99-100" l="99-100">
+    </meta>
+    <meta meter="isAttackedByAlien" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.454296875" y="0.18611111" width="0.10625" height="0.018056" string="HOSTILITY" confidence="70">
+    </meta>
+    <meta meter="isDamaged" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.4443" y="0.1786" width="0.1106" height="0.0486" string="DAMAGE" confidence="70">
+        <resolution size="1920x1200" x="0.4703125" y="0.18166666" width="0.08802083" height="0.04083333"/>   
+    </meta>
+    <meta meter="isPowerOut" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.03020833" y="0.335833" width="0.068229166" height="0.0216666" string="Fuse Broken" confidence="70">
+        <resolution size="1920x1200" x="0.03020833" y="0.335833" width="0.068229166" height="0.0216666"/>    
+    </meta>
 </head>
 <body style="margin: 0; padding: 0">
     <canvas id="colorCanvas" width="320" height="200"></canvas>
@@ -268,13 +275,45 @@
             alertFlashFrame = 0;
         }
     }
+
+    function renderCRTPowerOff(progress, duration)
+    {
+        let width = canvas.width;
+        let height = canvas.height;
+
+        if (progress > duration)
+        {
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height); // All black
+        } else
+        {
+            // Clear the canvas for the new frame
+            ctx.clearRect(0, 0, width, height);
+            // Calculate the current state of the effect
+            let state = Math.min(progress / duration, 1);
+
+            // Draw the horizontal bars
+            let currentHeight = height * state / 2;
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, width, currentHeight); // Top bar
+            ctx.fillRect(0, height - currentHeight, width, currentHeight); // Bottom bar
+
+            // Draw the vertical bars if the horizontal ones are almost in the center
+            if (currentHeight >= centerY - 2) {
+                let currentWidth = (width * (state - 0.5)) / 2;
+                ctx.fillRect(0, 0, currentWidth, height); // Left bar
+                ctx.fillRect(width - currentWidth, 0, currentWidth, height); // Right bar
+            }
+        }
+    }
 </script>
 
 <script>
     class AlertAnimation
     {
-        constructor()
+        constructor(duration)
         {
+            this.duration = duration;
             this.reset();
         }
 
@@ -296,7 +335,8 @@
 
         end()
         {
-            this.timeout = setTimeout(this.reset.bind(this), 200);
+            var self = this;
+            this.timeout = setTimeout(() => { self.reset(); }, 200);
         }
 
         clearTimeout()
@@ -305,7 +345,7 @@
             if (this.timeout) clearTimeout(this.timeout);
         }
 
-        getDuration(time)
+        getTime(time)
         {
             this.t = time - this.startTime;
             return this.t;
@@ -319,6 +359,7 @@
             console.log('Constructed Satisfactory');
             
             this.dismantling = new AlertAnimation();
+            this.powerOut = new AlertAnimation(2000);
             // var x = Math.round(2560 * .00039);
             // var y = Math.round(1440 * .000695);
             // var width = Math.round(2560 * .01);
@@ -328,7 +369,8 @@
 
         render(time)
         {
-            this.renderDismantle(engine.vision.isDismantling, time);
+            this.handleDismantle(engine.vision.isDismantling, time);
+            this.handlePowerOut(engine.vision.isPowerOut == 1, time);
 
             if (engine.vision.isDamagedByAlien == 1)
             {
@@ -343,14 +385,14 @@
             }
         }
 
-        renderDismantle(dismantling, time)
+        handleDismantle(isDismantling, time)
         {
-            if (!dismantling && this.dismantling.active)
+            if (!isDismantling && this.dismantling.active)
             {
                 // We should stop the animation
                 // So we set a timeout
                 this.dismantling.end();
-            } else if (dismantling)
+            } else if (isDismantling)
             {
                 // We should be dismantling
                 if (this.dismantling.active)
@@ -364,6 +406,33 @@
                 {
                     this.dismantling.start(time);
                 }
+            }
+        }
+
+        handlePowerOut(isPowerOut, time)
+        {
+            if (isPowerOut && !this.powerOut.active)
+            {
+                // Power is out when it wasn't before
+                this.powerOut.active = true;
+            }
+            
+            if (isPowerOut)
+            {
+                this.powerOut.clearTimeout();
+                var self = this;
+                this.powerOut.timeout = setTimeout(() => {
+                    self.powerOut.end();
+                }, 10000);
+            }
+
+            if (this.powerOut.active)
+            {
+                // Render the effect if still active
+                renderCRTPowerOff(
+                    this.powerOut.getTime(time),
+                    this.powerOut.duration
+                );
             }
         }
     }
