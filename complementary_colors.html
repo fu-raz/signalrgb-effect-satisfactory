@@ -19,15 +19,16 @@
     <meta property="alertType" label="Alert Type" type="combobox" values="Swipe,Flash" default="Swipe"/>
     <meta property="testAlert" label="Test alert" type="boolean" default="1"/>
 
+    <!-- Default resolution 2560x1440 -->
     <meta meter="isDismantling" tags="Satisfactory,vlc" type="area" x="0" y="0" width=".1" height=".007" h="18-20" s="99-100" l="99-100">
     </meta>
     <meta meter="isAttackedByAlien" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.454296875" y="0.18611111" width="0.10625" height="0.018056" string="HOSTILITY" confidence="70">
     </meta>
-    <meta meter="isDamaged" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.4443" y="0.1786" width="0.1106" height="0.0486" string="DAMAGE" confidence="70">
-        <resolution size="1920x1200" x="0.4703125" y="0.18166666" width="0.08802083" height="0.04083333"/>   
+    <meta meter="isDamaged" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.471484375" y="0.18055555555555" width="0.03671875" height="0.0256944444" string="DAMAGE" confidence="70">
+        <resolution size="1920x1200" x="0.4703125" y="0.18166666" width="0.08802083" height="0.04083333"/>
     </meta>
-    <meta meter="isPowerOut" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.03020833" y="0.335833" width="0.068229166" height="0.0216666" string="Fuse Broken" confidence="70">
-        <resolution size="1920x1200" x="0.03020833" y="0.335833" width="0.068229166" height="0.0216666"/>    
+    <meta meter="isPowerOut" tags="Satisfactory,vlc" type="ocr_textmatch" x="0.027734375" y="0.335833" width="0.060546875" height="0.01875" string="Fuse Broken" confidence="70">
+        <resolution size="1920x1200" x="0.03020833" y="0.335833" width="0.068229166" height="0.0216666"/>
     </meta>
 </head>
 <body style="margin: 0; padding: 0">
@@ -261,9 +262,9 @@
         }
     }
 
-    function renderAlertFlash(color)
+    function renderAlertFlash(color, flashDuration)
     {
-        const duration = 0.2;
+        const duration = flashDuration ? flashDuration : 0.2;
         const totalFrames = duration * fps;
         if (alertFlashFrame < totalFrames) {
             ctx.fillStyle = color;
@@ -281,14 +282,15 @@
         let width = canvas.width;
         let height = canvas.height;
 
+        let centerY = height / 2;
+        let centerX = width / 2;
+
         if (progress > duration)
         {
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height); // All black
         } else
         {
-            // Clear the canvas for the new frame
-            ctx.clearRect(0, 0, width, height);
             // Calculate the current state of the effect
             let state = Math.min(progress / duration, 1);
 
@@ -336,7 +338,10 @@
         end()
         {
             var self = this;
-            this.timeout = setTimeout(() => { self.reset(); }, 200);
+
+            this.timeout = setTimeout(() => {
+                self.reset();
+            }, 200);
         }
 
         clearTimeout()
@@ -359,24 +364,15 @@
             console.log('Constructed Satisfactory');
             
             this.dismantling = new AlertAnimation();
-            this.powerOut = new AlertAnimation(2000);
-            // var x = Math.round(2560 * .00039);
-            // var y = Math.round(1440 * .000695);
-            // var width = Math.round(2560 * .01);
-            // var height = Math.round(1440 * .000695);
-            // console.log(`Checking pixel location ${x},${y} - ${width} x ${height}`);
+            this.powerOut = new AlertAnimation(1000);
+            this.damage = new AlertAnimation();
         }
 
         render(time)
         {
             this.handleDismantle(engine.vision.isDismantling, time);
             this.handlePowerOut(engine.vision.isPowerOut == 1, time);
-
-            if (engine.vision.isDamagedByAlien == 1)
-            {
-                console.log(engine.vision.isDamaged);
-                console.log('Damage!');
-            }
+            this.handleDamage(engine.vision.isDamaged == 1, time);
 
             if (engine.vision.isAttackedByAlien == 1)
             {
@@ -409,18 +405,39 @@
             }
         }
 
+        handleDamage(isDamaged, time)
+        {
+            if (!isDamaged && this.damage.active)
+            {
+                this.damage.end();
+            } else if (isDamaged)
+            {
+                if (this.damage.active)
+                {
+                    this.damage.clearTimeout();
+
+                    // TODO: Do a switch of animation type
+                    renderAlertFlash("#FF0000", 0.75);
+                } else
+                {
+                    this.damage.start(time);
+                }
+            }
+        }
+
         handlePowerOut(isPowerOut, time)
         {
             if (isPowerOut && !this.powerOut.active)
             {
                 // Power is out when it wasn't before
-                this.powerOut.active = true;
+                this.powerOut.start(time);
             }
             
             if (isPowerOut)
             {
                 this.powerOut.clearTimeout();
                 var self = this;
+
                 this.powerOut.timeout = setTimeout(() => {
                     self.powerOut.end();
                 }, 10000);
